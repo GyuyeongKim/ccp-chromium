@@ -6,7 +6,6 @@
 
 namespace quic {
 typedef uint32_t sockid;
-typedef void ctrlPath;    
 }
 
 #endif // COMMON_H_

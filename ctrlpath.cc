@@ -8,12 +8,12 @@
 #include <sys/socket.h> // socket
 #include <cstring> // memcpy
 #include <cstdio> // sprintf
-#include <unistd.h> // close
+#include <unistd.h> // close, sleep
 #include <sys/stat.h> // mkdir
 #include <sys/types.h> // DIR type
 #include <dirent.h> // opendir
 
-#define CTRLPATH_BUF_SIZE   4096
+#define CTRLPATH_BUF_SIZE   BIGGEST_MSG_SIZE
 
 namespace quic {
 
@@ -25,6 +25,7 @@ sockid to_agent_SocketId;
 sockid connect_agent(dpstate& state) {
     // TODO:
     int socketId;
+
     const char to_agent[] = "/tmp/ccp-ccp-in";
     struct sockaddr_un addr;
 
@@ -228,6 +229,73 @@ int send_to_agent(sockid socketId, char *msg, int msg_size) {
     return msg_size;
 }
 
+// send create msg
+int send_createmsg(sockid socketId, uint32_t startSeq, const char *alg) {
+    if (socketId == (sockid) -1) {
+        socketId = to_agent_SocketId;
+    }
+
+    char msg[CTRLPATH_BUF_SIZE];
+    int ok = -1;
+    
+    int len = writeCreateMsg(msg, CTRLPATH_BUF_SIZE, socketId, startSeq, alg);
+    if (len > 0)
+        ok = send_to_agent(socketId, msg, len);
+    if (ok < 0) {
+        cp_vlog << "create notif failed: id=" << socketId << ", err=" << ok << std::endl;
+    }
+
+    return ok;
+}
+
+// send datapath measurements
+// ackNo, rtt, rin, rout
+int send_measuremsg(sockid socketId, ccp_measurement mnt) {
+    char msg[CTRLPATH_BUF_SIZE];
+    int ok = -1;
+    int msg_size;
+    cp_vlog << "sending measurement notif: id=" << socketId << ", cumAck=" << mnt.ackNo << ", rtt=" << mnt.rtt << ", loss=" << mnt.loss << ", rin=" << mnt.rin << ", rout=" << mnt.rout << std::endl;
+    msg_size = writeMeasureMsg(msg, BIGGEST_MSG_SIZE, socketId, mnt.ackNo, mnt.rtt, mnt.loss, mnt.rin, mnt.rout);
+    ok = send_to_agent(socketId, msg, msg_size);
+    if (ok < 0) {
+        cp_vlog << "mnt notif failed: id=" << socketId << ", cumAck=" << mnt.ackNo << ", rtt=" << mnt.rtt << ", loss=" << mnt.loss << ", rin=" << mnt.rin << ", rout=" << mnt.rout << std::endl;
+    }
+    return ok;
+}
+
+int send_dropnotif(sockid socketId, enum drop_type dtype) {
+    char msg[CTRLPATH_BUF_SIZE];
+    int ok = -1;
+    int msg_size;
+    cp_vlog << "sending drop: id=" << socketId << ", ev=" << dtype << std::endl;
+
+    switch (dtype) {
+        case DROP_TIMEOUT:
+            msg_size = writeDropMsg(msg, BIGGEST_MSG_SIZE, socketId, "timeout");
+            break;
+        case DROP_DUPACK:
+            msg_size = writeDropMsg(msg, BIGGEST_MSG_SIZE, socketId, "dupack");
+            break;
+        case DROP_ECN:
+            msg_size = writeDropMsg(msg, BIGGEST_MSG_SIZE, socketId, "ecn");
+            break;
+        default:
+           	cp_vlog << "sending drop: unknown event? id=" << socketId << ", ev=" << dtype << " != {" << DROP_TIMEOUT << ", " << DROP_DUPACK << ", " << DROP_ECN << "}" << std::endl;
+        	return -2;
+    }
+
+    ok = send_to_agent(socketId, msg, msg_size);
+    if (ok < 0) {
+        cp_vlog << "drop notif failed: id=" << socketId << ", ev=" << dtype << ", err=" << ok << std::endl;
+    }
+    return ok;        
+}
+
+void print_cp_vlog() {
+    std::cout << cp_vlog.str() << std::endl;
+    cp_vlog.clear();
+}
+
 void ctrlPathController() {
     // TODO: 쓰레드로 구현할 경우에 사용하기 위한 함수.
     // 다만 현실적으로 QUIC의 이벤트 콜백으로 위 함수들을 사용하는 게
@@ -237,47 +305,15 @@ void ctrlPathController() {
     testState = new dpstate();
     sockid socketId = connect_agent(*testState);
 
-    std::cout << "To Agent Socket ID: " << socketId << " " << to_agent_SocketId << std::endl;
-    std::cout << cp_vlog.str() << std::endl;
-    cp_vlog.clear();
-
     listen_ctrlpath(*testState);
-    std::cout << cp_vlog.str() << std::endl;
-    cp_vlog.clear();
 
-    testState->ackNo = 0;
-    char buf[CTRLPATH_BUF_SIZE];
-    memset(buf, 0, CTRLPATH_BUF_SIZE);
-    std::cout << "Get Socket ID: " << testState->get_socketId() << std::endl;
-    int len = writeCreateMsg(buf, CTRLPATH_BUF_SIZE, testState->get_socketId(), (testState->ackNo)++, "cubic");
-    if (len > 0)
-        send_to_agent(to_agent_SocketId, buf, len);
-
-    std::cout << cp_vlog.str() << std::endl;
-    cp_vlog.clear();
+    send_createmsg(testState->get_socketId(), testState->snd_una, "vegas");
 
     recv_from_ctrlpath(*testState);
-    std::cout << cp_vlog.str() << std::endl;
-    cp_vlog.clear();
-
-    std::cout << "GO TO WHILE" << std::endl;
 
     while(1) {
-        //memset(buf, 0, CTRLPATH_BUF_SIZE);
-        // for(int j=0;j<10;j++) {
-            // writeMeasureMsg(buf, CTRLPATH_BUF_SIZE, testState->get_socketId(),
-            //             (testState->ackNo)++, 10, 0, 1, 1);
-            // if (len > 0)
-            //     send_to_agent(to_agent_SocketId, buf, len);
-            // std::cout << cp_vlog.str() << std::endl;
-            // cp_vlog.clear();
-            for(int i=0;i<1000000;i++) {
-                std::cout << "";
-            }
-        // }
+        sleep(1);
 
-        // std::cout << cp_vlog.str() << std::endl;
-        // cp_vlog.clear();
         testState->sync_with_agent(testState->get_now());
         testState->print_log();
         recv_from_ctrlpath(*testState);

@@ -79,6 +79,15 @@ namespace quic {
 
     int send_to_agent(sockid socketId, char *msg, int msg_size);
 
+        // send create msg
+    int send_createmsg(sockid socketId = -1, uint32_t startSeq, const char *alg = "cubic");
+
+    // send datapath measurements
+    // ackNo, rtt, rin, rout
+    int send_measuremsg(sockid socketId, ccp_measurement mnt);
+
+    int send_dropnotif(sockid socketId, enum drop_type dtype);
+
     void ctrlPathController();
 
 }

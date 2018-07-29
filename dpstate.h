@@ -16,6 +16,31 @@
 
 namespace quic {
 
+    // Written by the google team
+    // history https://github.com/torvalds/linux/commits/master/net/ipv4/tcp_rate.c
+    // located in include/net/tcp.h
+    // A rate sample measures the number of (original/retransmitted) data
+    // packets delivered "delivered" over an interval of time "interval_us".
+    // The tcp_rate.c code fills in the rate sample, and congestion
+    // control modules that define a cong_control function to run at the end
+    // of ACK processing can optionally chose to consult this sample when
+    // setting cwnd and pacing rate.
+    // A sample is invalid if "delivered" or "interval_us" is negative.
+    struct rate_sample {
+        int32_t delivered; 		/* number of packets delivered over interval */
+        long interval_us; 	/* time for tp->delivered to incr "delivered" */
+        long snd_int_us; 	/* snd interval for delivered packets */				// added by ngsrinivas/linux-fork
+        long rcv_int_us; 	/* rcv interval for delivered packets */				// added by ngsrinivas/linux-fork
+        long rtt_us;		/* RTT of last (S)ACKed packet (or -1) */
+        int losses;			/* Rnumber of packets marked lost upon ACK */
+    };
+
+    // located in include/net/tcp.h
+    struct ack_sample {
+        uint32_t pkts_acked;
+        int32_t rtt_us;
+    };
+
     typedef uint64_t dp_time;
 
     typedef MeasureMsg ccp_measurement;
@@ -38,35 +63,25 @@ namespace quic {
 
     class dpstate {
         private:
-            sockid socketId; // Listen Socket
-            ctrlPath* agent; // agent는 보낼 message queue를 가지고 있다고 하자.
+            sockid socketId; // Listen Socket, ccp_index에 해당되는 듯.
+            sockid agent; // agent는 보낼 message queue를 가지고 있다고 하자.
             dp_time (*now)();
             dp_time (*mus)();
-
             
-
-            Events seq;
+            // CCP TCP STATE
+            uint32_t snd_rate;   /* ca->rate */            
+            Events seq; // struct PatternEvent *pattern;
             uint8_t currPatternEvent;
+            // uint8_t numPatternEvents;는 seq.len()으로 계산 가능하니 무시
             dp_time next_event_time;
             dp_time now_time;
             dp_time mus_time;
+            enum drop_type last_drop_state;
+            uint32_t num_loss;
 
-            uint8_t ca_state; // congestion algorithm state tcp_ca_state
+            ccp_measurement smoothed; // struct ccp_measurement mmt; 인듯? 실제로는 ackNo와 loss는 smoothed가 아님.
 
-            //tcp_sock
-            /* RFC793 variables by their proper names. this means you can
-            * read the code and the spec side by side (and laugh ...)
-            * See RFC793 and RFC1122. The RFC writes these in capitals. */
-            uint32_t snd_una; /* First byte we want an ack for */
-            /* Data for direct copy to user */
-            uint32_t mss_cache; 	/* Cached effective mss, not including SACKS */
-            /* Slow start and congestion control (see also Nagle, and Karn & Patridge) */
-            uint32_t snd_ssthresh; /* Slow start size threshold */
-            uint32_t snd_cwnd;	/* sending congestion window */
-
-            uint32_t snd_rate;   /* ca->rate */
-
-            ccp_measurement sample;
+            uint8_t ca_state; // congestion algorithm state tcp_ca_state (어디다 쓰는 거지?)
 
             bool doSetCwndAbs(uint32_t cwnd);
             bool doSetRateAbs(uint32_t rate);
@@ -77,67 +92,47 @@ namespace quic {
 
             void log_seq();
 
+            static int rate_sample_valid(const struct rate_sample *rs);
+            static uint64_t ewma(uint64_t old, uint64_t __new);            
+
         public:
-            uint32_t ackNo; // TODO...
-            void print_log() {
-                std::cout << vlog.str() << std::endl;vlog.clear();
-            }
+            //tcp_sock
+            /* RFC793 variables by their proper names. this means you can
+            * read the code and the spec side by side (and laugh ...)
+            * See RFC793 and RFC1122. The RFC writes these in capitals. */
+            uint32_t snd_una; /* First byte we want an ack for */ // ackNo 의미함
+            /* Data for direct copy to user */
+            uint32_t mss_cache; 	/* Cached effective mss, not including SACKS */
+            /* Slow start and congestion control (see also Nagle, and Karn & Patridge) */
+            uint32_t snd_ssthresh; /* Slow start size threshold */
+            uint32_t snd_cwnd;	/* sending congestion window */
+
             dpstate();
-            std::stringstream vlog;
 
-            void set_socketId(sockid socketId) {
-                this->socketId = socketId;
-            }
-            sockid get_socketId() {
-                return socketId;
-            }
-
-            dp_time get_now() {
-                //http://egloos.zum.com/sweeper/v/2996847
-                //https://stackoverflow.com/questions/28964547/cast-chronomilliseconds-to-uint64-t
-                // http://rachelnertia.github.io/programming/2018/01/07/intro-to-std-chrono/
-                std::chrono::microseconds mus = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch());
-                now_time = mus.count();
-                return now_time;
-            };
-            dp_time get_mus_to_dp_time_fn() {
-                return 1;
-                //TODO: 
-                return mus_time; 
-            };
-            void set_agent(ctrlPath* agent);
-            void set_clock_fn(dp_time (*now)());
-            void set_mus_to_dp_time_fn(dp_time (*mus)());
             bool sync_with_agent(dp_time now);              // sendStateMachine
             bool sync_from_agent(Events& seq, dp_time now); // installPattern
+ 
+            // tcp_congestion_ops
+            // 참고: http://netlab.caltech.edu/projects/ns2tcplinux/ns2linux/tutorial/index.html
+            // 참고: http://www.yonch.com/tech/linux-tcp-congestion-control-internals
+            void congestion_control(const struct rate_sample *rs); // main 함수에 해당
+            uint32_t get_ssthresh();    // ssthresh
+            uint32_t undo_cwnd();       // undo_cwnd
+            void pkts_acked(const struct ack_sample *sample); // pkts_acked
+            void set_state(uint8_t new_state);  // set_state
+            void set_pacing_rate(); // from tcp_ccp.cc ccp_set_pacing_rate
 
-            // dpstate& dpstate::operator=(const dpstate& p) {
-            //     socketId = p.socketId;
-            //     agent = p.agent;
-            //     now = p.now;
-            //     mus = p.mus;
+            // etc
+            void set_agent(sockid agent);
+            std::stringstream vlog;
+            void print_log();
 
-            //     seq.clear();
-            //     for(Events::iterator it = (p.seq).begin(); it != (p.seq).end(); it++) {
-            //         seq.push_back(*it);
-            //     }
-            
-            //     currPatternEvent = p.currPatternEvent;
-            //     next_event_time = p.next_event_time;
-            //     now_time = p.now_time;
-            //     mus_time = p.mus_time;
-                
-            //     ca_state = p.ca_state;
-                
-            //     snd_una = p.snd_una;
-            //     mss_cache = p.mss_cache;
-            //     snd_ssthresh = p.snd_ssthresh;
-            //     snd_cwnd = p.snd_cwnd;
-
-            //     snd_rate = p.snd_rate;
-                
-            //     memcpy(&sample, &(p.sample), sizeof(ccp_measurement)); 
-            // }
+            void set_socketId(sockid socketId):
+            sockid get_socketId();
+            void set_clock_fn(dp_time (*now)());
+            void set_mus_to_dp_time_fn(dp_time (*mus)());
+            dp_time get_now();
+            dp_time get_mus_to_dp_time_fn();
     };
 
 
