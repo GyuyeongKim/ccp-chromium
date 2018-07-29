@@ -22,14 +22,7 @@ dpstate::dpstate() { // tcp_ccp_init
     last_drop_state = NO_DROP;
     num_loss = 0;
 
-    ccp_measurement init_mmt = {
-        .ackNo = 0,
-        .rtt = 0,
-        .rin = 0, /* send bandwidth in bytes per second */
-        .rout = 0, /* recv bandwidth in bytes per second */
-        .loss = 0,
-    };
-    std::memcpy(&(smoothed), &init_mmt, sizeof(ccp_measurement));    
+    std::memset(&(smoothed), 0, sizeof(ccp_measurement));    
 }
 
 bool dpstate::doSetCwndAbs(uint32_t cwnd) {

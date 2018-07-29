@@ -129,7 +129,7 @@ sockid listen_ctrlpath(dpstate& state) {
     ccp_active_connections[socketId] = &state;
 
     state.set_socketId(socketId);
-    std::cout << "State's socket ID: " << socketId << " " << state.get_socketId() << std::endl;
+    cp_vlog << "State's socket ID: " << socketId << " " << state.get_socketId() << std::endl;
 
     return ((sockid) socketId);
 }
@@ -240,7 +240,7 @@ int send_createmsg(sockid socketId, uint32_t startSeq, const char *alg) {
     
     int len = writeCreateMsg(msg, CTRLPATH_BUF_SIZE, socketId, startSeq, alg);
     if (len > 0)
-        ok = send_to_agent(socketId, msg, len);
+        ok = send_to_agent(to_agent_SocketId, msg, len); // should be sent to ccp-ccp-in
     if (ok < 0) {
         cp_vlog << "create notif failed: id=" << socketId << ", err=" << ok << std::endl;
     }
@@ -307,9 +307,14 @@ void ctrlPathController() {
 
     listen_ctrlpath(*testState);
 
+    cp_vlog << "SocketId: " << testState->get_socketId() << std::endl;
     send_createmsg(testState->get_socketId(), testState->snd_una, "vegas");
 
     recv_from_ctrlpath(*testState);
+
+    print_cp_vlog();
+
+    std::cout << "Sync" << std::endl;
 
     while(1) {
         sleep(1);

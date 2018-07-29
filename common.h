@@ -6,6 +6,7 @@
 
 namespace quic {
 typedef uint32_t sockid;
+
 }
 
 #endif // COMMON_H_

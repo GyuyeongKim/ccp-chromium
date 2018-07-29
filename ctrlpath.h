@@ -80,7 +80,7 @@ namespace quic {
     int send_to_agent(sockid socketId, char *msg, int msg_size);
 
         // send create msg
-    int send_createmsg(sockid socketId = -1, uint32_t startSeq, const char *alg = "cubic");
+    int send_createmsg(sockid socketId, uint32_t startSeq, const char *alg);
 
     // send datapath measurements
     // ackNo, rtt, rin, rout

@@ -60,6 +60,8 @@ struct __attribute__((packed, aligned(4))) MeasureMsg {
     uint64_t rout;
 };
 
+typedef MeasureMsg ccp_measurement;
+
 enum drop_type {
     NO_DROP,
     DROP_TIMEOUT,

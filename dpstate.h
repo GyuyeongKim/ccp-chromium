@@ -43,8 +43,6 @@ namespace quic {
 
     typedef uint64_t dp_time;
 
-    typedef MeasureMsg ccp_measurement;
-
     // TCP의 상태인데, 이를 quic에 맞추어 바꾸어야 함
     // include/uapi/linux/tcp.h
     enum tcp_ca_state {
@@ -127,7 +125,7 @@ namespace quic {
             std::stringstream vlog;
             void print_log();
 
-            void set_socketId(sockid socketId):
+            void set_socketId(sockid socketId);
             sockid get_socketId();
             void set_clock_fn(dp_time (*now)());
             void set_mus_to_dp_time_fn(dp_time (*mus)());
