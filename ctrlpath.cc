@@ -188,6 +188,14 @@ void ctrlPathController() {
     // TODO: 쓰레드로 구현할 경우에 사용하기 위한 함수.
     // 다만 현실적으로 QUIC의 이벤트 콜백으로 위 함수들을 사용하는 게
     // 현실적일 듯
+
+    dpstate *testState;
+    testState = new dpstate();
+    sockid socketId = connect_ctrlpath(*testState);
+
+    std::cout << "Socket ID: " << socketId << std::endl;
+
+    close_ctrlpath(*testState);
 }
 
 } // namespace quic

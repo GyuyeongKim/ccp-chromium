@@ -67,9 +67,9 @@ namespace quic {
     extern std::stringstream cp_vlog;
     extern sockid to_agent_SocketId;
 
-    sockid connect_ctrlpath(dpstate state);
+    sockid connect_ctrlpath(dpstate& state);
 
-    sockid listen_ctrlpath(dpstate state);
+    sockid listen_ctrlpath(dpstate& state);
 
     void close_ctrlpath(dpstate& state);
 
