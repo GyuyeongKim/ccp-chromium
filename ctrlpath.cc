@@ -194,6 +194,7 @@ void ctrlPathController() {
     sockid socketId = connect_ctrlpath(*testState);
 
     std::cout << "Socket ID: " << socketId << std::endl;
+    std::cout << cp_vlog.str() << std::endl;
 
     close_ctrlpath(*testState);
 }
