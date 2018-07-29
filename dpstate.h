@@ -1,6 +1,6 @@
 #ifndef DPSTATE_H_
 #define DPSTATE_H_
-
+#include "common.h"
 #include "serialize.h"
 #include "ctrlpath.h"
 

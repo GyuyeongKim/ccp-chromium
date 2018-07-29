@@ -5,7 +5,7 @@
 namespace quic {
 
 dpstate::dpstate() {
-
+    socketId = 0;
 }
 
 bool dpstate::doSetCwndAbs(uint32_t cwnd) {
@@ -21,6 +21,7 @@ bool dpstate::doSetRateAbs(uint32_t rate) {
     // TODO: ccp_set_pacing_rate
     return true;
 }
+
 bool dpstate::doSetRateRel(uint32_t factor) {
     uint64_t newrate = snd_rate * factor;
     newrate = newrate / 100;
@@ -41,6 +42,7 @@ bool dpstate::doWaitAbs(uint32_t wait_us) {
     next_event_time = get_now() + wait_us * get_mus_to_dp_time_fn();
     return false;
 }
+
 bool dpstate::doWaitRel(uint32_t rtt_factor) {
     uint64_t rtt_us = sample.rtt;
     uint64_t wait_us = rtt_factor * rtt_us;
@@ -124,6 +126,9 @@ bool dpstate::sync_with_agent(dp_time now) {              // sendStateMachine
             break;
     }
 
+
+    vlog << "[ev ] unrecognizaable report" << std::endl;
+    return true;
 }
 
 bool dpstate::sync_from_agent(Events& seq, dp_time now) { // installPattern

@@ -1,8 +1,7 @@
 #ifndef CTRLPATH_H_
 #define CTRLPATH_H_
 
-#include <cstdint> // for uint32_t etc.
-
+#include "common.h"
 #include "dpstate.h"
 
 #include <map>
@@ -63,9 +62,6 @@ namespace quic {
 
     class dpstate;
 
-    typedef uint32_t sockid;
-    typedef void ctrlPath;
-
     typedef std::map<sockid, dpstate*> connMap; // 포인터만 저장하므로 dpstate는 반드시 다른 곳에서 저장해야 한다.
     extern connMap ccp_active_connections;
     extern std::stringstream cp_vlog;
@@ -77,7 +73,7 @@ namespace quic {
 
     void close_ctrlpath(dpstate& state);
 
-    void recv_from_ctrlpath(dpstate& state) {
+    void recv_from_ctrlpath(dpstate& state);
 
     void recv_from_agent(char* buf);
 

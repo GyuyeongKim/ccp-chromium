@@ -3,7 +3,7 @@
 
 // http://webnautes.tistory.com/1158
 
-
+#include "common.h"
 #include <cstddef> // for NULL
 #include <cstdint> // for uint32_t etc.
 #include <vector>
