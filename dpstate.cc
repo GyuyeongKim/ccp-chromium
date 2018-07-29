@@ -6,6 +6,7 @@ namespace quic {
 
 dpstate::dpstate() {
     socketId = 0;
+    mss_cache = 1;
 }
 
 bool dpstate::doSetCwndAbs(uint32_t cwnd) {
@@ -34,6 +35,12 @@ bool dpstate::doSetRateRel(uint32_t factor) {
 bool dpstate::doReport() {
     vlog << "report = (" << sample.ackNo << ", " << sample.rtt << ", " << sample.loss << ", " << sample.rin << ", " << sample.rout << ")" << std::endl;
     // TODO: nl_send_measurement;
+    char buf[4096];
+    int len = writeMeasureMsg(buf, 4096, socketId,
+                        ackNo++, 10, 0, 1, 1);
+            if (len > 0)
+                send_to_agent(to_agent_SocketId, buf, len);
+
     return true;
 }
 
@@ -97,9 +104,9 @@ bool dpstate::sync_with_agent(dp_time now) {              // sendStateMachine
         return true;
     }
 
-    if(get_now() > next_event_time) {
+    if(now > next_event_time) {
         currPatternEvent = (currPatternEvent + 1) % seq.size();
-        vlog << "curr pattern event: " << currPatternEvent << std::endl;
+        vlog << "curr pattern event: " << (uint32_t) currPatternEvent << std::endl;
     } else {
         return false;
     }
@@ -127,15 +134,20 @@ bool dpstate::sync_with_agent(dp_time now) {              // sendStateMachine
     }
 
 
-    vlog << "[ev ] unrecognizaable report" << std::endl;
+    vlog << "[ev ] unrecognizable report" << std::endl;
     return true;
 }
 
 bool dpstate::sync_from_agent(Events& seq, dp_time now) { // installPattern
-    log_seq();
     this->seq = seq;
+    log_seq();    
     currPatternEvent = seq.size() - 1;
     next_event_time = get_now();
+    std::cout << "sync_from_agent" << std::endl << vlog.str() << std::endl;
+    std::cout << "new seq size: " << (unsigned int)currPatternEvent << std::endl;
+    std::cout << "now: " << now << std::endl;
+    std::cout << "next_event_time: " << next_event_time << std::endl;
+    print_log();
     return sync_with_agent(now);
 }
 

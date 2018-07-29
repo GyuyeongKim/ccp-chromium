@@ -4,6 +4,7 @@
 #include "serialize.h"
 #include "ctrlpath.h"
 
+#include <chrono> // millisecond time
 #include <sstream>
 
 // Google QUIC에서는 시간을 관리하는 복잡한 함수를 지원하고 있는데,
@@ -42,6 +43,8 @@ namespace quic {
             dp_time (*now)();
             dp_time (*mus)();
 
+            
+
             Events seq;
             uint8_t currPatternEvent;
             dp_time next_event_time;
@@ -75,6 +78,10 @@ namespace quic {
             void log_seq();
 
         public:
+            uint32_t ackNo; // TODO...
+            void print_log() {
+                std::cout << vlog.str() << std::endl;vlog.clear();
+            }
             dpstate();
             std::stringstream vlog;
 
@@ -85,13 +92,24 @@ namespace quic {
                 return socketId;
             }
 
-            dp_time get_now() {return now_time;};
-            dp_time get_mus_to_dp_time_fn() {return mus_time; };
+            dp_time get_now() {
+                //http://egloos.zum.com/sweeper/v/2996847
+                //https://stackoverflow.com/questions/28964547/cast-chronomilliseconds-to-uint64-t
+                // http://rachelnertia.github.io/programming/2018/01/07/intro-to-std-chrono/
+                std::chrono::microseconds mus = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch());
+                now_time = mus.count();
+                return now_time;
+            };
+            dp_time get_mus_to_dp_time_fn() {
+                return 1;
+                //TODO: 
+                return mus_time; 
+            };
             void set_agent(ctrlPath* agent);
             void set_clock_fn(dp_time (*now)());
             void set_mus_to_dp_time_fn(dp_time (*mus)());
-            bool sync_with_agent(dp_time now = 0);              // sendStateMachine
-            bool sync_from_agent(Events& seq, dp_time now = 0); // installPattern
+            bool sync_with_agent(dp_time now);              // sendStateMachine
+            bool sync_from_agent(Events& seq, dp_time now); // installPattern
 
             // dpstate& dpstate::operator=(const dpstate& p) {
             //     socketId = p.socketId;

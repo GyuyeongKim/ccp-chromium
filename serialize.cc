@@ -56,7 +56,7 @@ int writeCreateMsg(
     int bufsize,
     uint32_t sid,
     uint32_t startSeq,
-    char* congAlg
+    const char* congAlg
 ) {
     int ok;
     int congAlgLen = strlen(congAlg) + 1;
@@ -132,7 +132,7 @@ int writeDropMsg(
     char *buf,
     int bufsize,
     uint32_t sid,
-    char* str
+    const char* str
 ) {
     int ok;
     int dropMsgLen = strlen(str) + 1;

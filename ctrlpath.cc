@@ -1,6 +1,9 @@
 #include "ctrlpath.h"
 #include "serialize.h"
 
+
+#include <unistd.h> // fnctl
+#include <fcntl.h> // fnctl
 #include <sys/un.h> // unix domain socket
 #include <sys/socket.h> // socket
 #include <cstring> // memcpy
@@ -19,25 +22,26 @@ std::stringstream cp_vlog;
 sockid to_agent_SocketId;
 
 // 서버에 접속
-sockid connect_ctrlpath(dpstate& state) {
+sockid connect_agent(dpstate& state) {
     // TODO:
     int socketId;
     const char to_agent[] = "/tmp/ccp-ccp-in";
     struct sockaddr_un addr;
 
-    socketId = socket(AF_UNIX, SOCK_STREAM, 0);
+    socketId = socket(AF_UNIX, SOCK_DGRAM, 0);
     if (socketId == -1) {
-        cp_vlog << "socket creation error!" << std::endl;
+        cp_vlog << "socket creation error!" << strerror(errno) << std::endl;
         to_agent_SocketId = ((sockid) -1);
         return ((sockid) -1);
     }
+    cp_vlog << "socket created: " << socketId << std::endl;
 
     std::memset(&addr, 0, sizeof(struct sockaddr_un));
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, to_agent, sizeof(addr.sun_path) - 1);
 
     if(connect(socketId, (struct sockaddr *) &addr, sizeof(struct sockaddr_un)) == -1) {
-        cp_vlog << "connect error!" << std::endl;
+        cp_vlog << "connect error! " << strerror(errno) << std::endl;
         to_agent_SocketId = ((sockid) -1);
         return ((sockid) -1);
     }
@@ -61,15 +65,25 @@ sockid listen_ctrlpath(dpstate& state) {
     int socketId;
     struct sockaddr_un addr;
 
-    socketId = socket(AF_UNIX, SOCK_STREAM, 0);
+    socketId = socket(AF_UNIX, SOCK_DGRAM, 0);
     if (socketId == -1) {
-        cp_vlog << "socket creation error!" << std::endl;
+        cp_vlog << "socket creation error! " << strerror(errno) << std::endl;
         to_agent_SocketId = ((sockid) -1);
         return ((sockid) -1);
     }
 
+    /* setting non-blocking mode for UDS */
+    // https://kldp.org/node/99263
+    int     flags;
+    if ((flags = fcntl(socketId, F_GETFL, 0)) < 0 ||
+        fcntl(socketId, F_SETFL, flags | O_NONBLOCK) < 0) {
+                cp_vlog << "setting O_NONBLOCK " << strerror(errno) << std::endl;
+        return ((sockid) -1);
+    }    
+
     char from_agent[92] = {0,}; // 92 바이트는 Kerrisk 참고
     int len;
+    //len = snprintf(from_agent, 92, "/tmp/ccp-ccp-out", socketId);
     len = snprintf(from_agent, 92, "/tmp/ccp-%d", socketId);
 
     // TODO: 디렉토리 생성
@@ -81,17 +95,17 @@ sockid listen_ctrlpath(dpstate& state) {
     } else if (ENOENT == errno) {
         err = mkdir(from_agent, 0755);
         if(err == -1) {
-            cp_vlog << "mkdir error!" << std::endl;
+            cp_vlog << "Warning in mkdir: " << strerror(errno) << std::endl;
         }
     } else {
-        cp_vlog << "open directory in " << from_agent << " error!" << std::endl;
+        cp_vlog << "open directory in " << from_agent << " error! " << strerror(errno) << std::endl;
         return ((sockid) -1);
     }
 
     len = snprintf(from_agent + len, 92 - len, "/ccp-out");
 
     if (remove(from_agent) == -1 && errno != ENOENT) {
-        cp_vlog << "remove " << from_agent << " error!" << std::endl;
+        cp_vlog << "remove " << from_agent << " error! " << strerror(errno) << std::endl;
         return ((sockid) -1);
     }
 
@@ -100,18 +114,21 @@ sockid listen_ctrlpath(dpstate& state) {
     strncpy(addr.sun_path, from_agent, sizeof(addr.sun_path) - 1 );
 
     if (bind(socketId, (struct sockaddr *) &addr, sizeof(struct sockaddr_un)) == -1) {
-        cp_vlog << "bind error" << std::endl;
+        cp_vlog << "bind error " << strerror(errno) << std::endl;
         return ((sockid) -1);
     }
 
-    if (listen(socketId, 1) == -1) { // BACKLOG를 1로 설정했는데 적절할까?
-        cp_vlog << "listen error" << std::endl;
-        return ((sockid) -1);
-    }
+    // if (listen(socketId, 1) == -1) { // BACKLOG를 1로 설정했는데 적절할까?
+    //     cp_vlog << "listen error " << strerror(errno) << std::endl;
+    //     return ((sockid) -1);
+    // }
 
     // TODO: 중요: dpstate 객체를 생성해서 대입하여야 함
     // 얇은 복사가 문제를 발생시킬 수 있음
     ccp_active_connections[socketId] = &state;
+
+    state.set_socketId(socketId);
+    std::cout << "State's socket ID: " << socketId << " " << state.get_socketId() << std::endl;
 
     return ((sockid) socketId);
 }
@@ -120,11 +137,12 @@ void close_ctrlpath(dpstate& state) {
     // TODO:
     sockid socketId = state.get_socketId();
     if (close(socketId) == -1) {
-        cp_vlog << "close error" << std::endl;
+        cp_vlog << "close error " << strerror(errno) << std::endl;
         return;
     }
 
-    if (socketId == to_agent_SocketId) {
+    if (socketId == to_agent_SocketId) { // 
+        cp_vlog << "cannot be occured..." << std::endl;
         to_agent_SocketId = ((sockid) -1);
         return;
     }
@@ -132,22 +150,34 @@ void close_ctrlpath(dpstate& state) {
     ccp_active_connections.erase(socketId);
 }
 
+void close_agent() {
+    // TODO:
+    if (close(to_agent_SocketId) == -1) {
+        cp_vlog << "close error " << strerror(errno) << std::endl;
+        return;
+    }
+    to_agent_SocketId = ((sockid) -1);
+}
+
 void recv_from_ctrlpath(dpstate& state) {
     int numRead;
     char buf[CTRLPATH_BUF_SIZE];
-    while((numRead = read(state.get_socketId(), buf, CTRLPATH_BUF_SIZE)) > 0) {
+    if((numRead = read(state.get_socketId(), buf, CTRLPATH_BUF_SIZE)) > 0) {
+        std::cout << "Read from CCP Agent! -------------------------------------------" << std::endl;
         recv_from_agent(buf);
         // TODO: 현재 코드는 buf에 들어온 메시지가 정상인 것만 가정함
+        // The assumptiuon is plausible: SOCK_DGRAM is used in the socket!
         // 예를 들어 1바이트가 잘못 추가되면 전체 메시지를 읽기만하고 날리게 됨
     }
 
     if(numRead == -1) {
-        cp_vlog << "read error" << std::endl;
+        cp_vlog << "read error " << strerror(errno) << std::endl;
     }
 }
 
 void recv_from_agent(char* buf) {
     // nl_recv 함수의 대체
+    // TODO: Should it contain read function...?
     int err;
     struct CcpMsgHeader hdr; // serialize.h
     struct PatternMsg msg; // serialize.h
@@ -158,6 +188,7 @@ void recv_from_agent(char* buf) {
     err = readMsg(&hdr, &msg, buf);
     if (err < 0) {
         // serialize에 정의된 형식대로 패턴 메시지를 읽으려고 하였으나 실패
+        std::cout << "failed to read" << std::endl;
         return;
     }
 
@@ -166,6 +197,7 @@ void recv_from_agent(char* buf) {
         // 들어본 적 없는 메시지라면 에러 없이 리턴
         // 이 이야기는 netlink의 모든 메시지를 듣고 그에 대해 이 함수가
         // 실행되고 있었음을 의미함
+        std::cout << "unseen connection" << std::endl;
         return;
     }
 
@@ -173,15 +205,27 @@ void recv_from_agent(char* buf) {
     err = readPattern(seq, msg.pattern, msg.numStates);
     if(err < 0) {
         // 정상적인 경우 0, 이상인 경우 -1
+        std::cout << "unreadable pattern" << std::endl;
         return;
     }
 
-    ((it)->second)->sync_from_agent(seq); // sk는 소켓 ID
+    std:: cout << "read complete!" << std::endl;
+
+    ((it)->second)->sync_from_agent(seq, ((it)->second)->get_now()); // sk는 소켓 ID
 }
 
 int send_to_agent(sockid socketId, char *msg, int msg_size) {
-    // TODO
-    return 0;
+    if(msg_size <=0) {
+        cp_vlog << "strange msg_size" << std::endl;
+        return 0;
+    }
+    int numWrite;
+    if((numWrite = write(socketId, msg, msg_size)) != msg_size) {
+        cp_vlog << "write error " << strerror(errno) << std::endl;
+        return -1;
+    }
+
+    return msg_size;
 }
 
 void ctrlPathController() {
@@ -191,12 +235,56 @@ void ctrlPathController() {
 
     dpstate *testState;
     testState = new dpstate();
-    sockid socketId = connect_ctrlpath(*testState);
+    sockid socketId = connect_agent(*testState);
 
-    std::cout << "Socket ID: " << socketId << std::endl;
+    std::cout << "To Agent Socket ID: " << socketId << " " << to_agent_SocketId << std::endl;
     std::cout << cp_vlog.str() << std::endl;
+    cp_vlog.clear();
 
-    close_ctrlpath(*testState);
+    listen_ctrlpath(*testState);
+    std::cout << cp_vlog.str() << std::endl;
+    cp_vlog.clear();
+
+    testState->ackNo = 0;
+    char buf[CTRLPATH_BUF_SIZE];
+    memset(buf, 0, CTRLPATH_BUF_SIZE);
+    std::cout << "Get Socket ID: " << testState->get_socketId() << std::endl;
+    int len = writeCreateMsg(buf, CTRLPATH_BUF_SIZE, testState->get_socketId(), (testState->ackNo)++, "cubic");
+    if (len > 0)
+        send_to_agent(to_agent_SocketId, buf, len);
+
+    std::cout << cp_vlog.str() << std::endl;
+    cp_vlog.clear();
+
+    recv_from_ctrlpath(*testState);
+    std::cout << cp_vlog.str() << std::endl;
+    cp_vlog.clear();
+
+    std::cout << "GO TO WHILE" << std::endl;
+
+    while(1) {
+        //memset(buf, 0, CTRLPATH_BUF_SIZE);
+        // for(int j=0;j<10;j++) {
+            // writeMeasureMsg(buf, CTRLPATH_BUF_SIZE, testState->get_socketId(),
+            //             (testState->ackNo)++, 10, 0, 1, 1);
+            // if (len > 0)
+            //     send_to_agent(to_agent_SocketId, buf, len);
+            // std::cout << cp_vlog.str() << std::endl;
+            // cp_vlog.clear();
+            for(int i=0;i<1000000;i++) {
+                std::cout << "";
+            }
+        // }
+
+        // std::cout << cp_vlog.str() << std::endl;
+        // cp_vlog.clear();
+        testState->sync_with_agent(testState->get_now());
+        testState->print_log();
+        recv_from_ctrlpath(*testState);
+    }
+
+    close_ctrlpath(*testState);    
+    close_agent();
 }
 
 } // namespace quic
