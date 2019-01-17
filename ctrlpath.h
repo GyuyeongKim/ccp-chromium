@@ -14,7 +14,6 @@
 
 // UNIX Domain Socekt은 여러 자료가 있으나
 // http://www.techdeviancy.com/uds.html 와
-// K
 
 namespace quic {
 
