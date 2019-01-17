@@ -12,8 +12,8 @@
 // ccp-kernel에 구현된 netlink는 다음 코드를 보고 작성한 것 같음
 // https://gist.github.com/arunk-s/c897bb9d75a6c98733d6
 
-// UNIX Domain Socekt은 여러 자료가 있으나
-// http://www.techdeviancy.com/uds.html 와
+// UNIX Domain Socket은 여러 자료가 있으나
+// http://www.techdeviancy.com/uds.html 참고할 것
 
 namespace quic {
 
