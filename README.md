@@ -3,7 +3,7 @@ QUIC Datapath Control Module for Chromium
 
 ## Introduction
 
-Congestion Control Plane (CCP) for Chromium (`ccp-chromium`) is a implementation of *a*STEAM Project <https://asteam.korea.ac.kr>'s QUIC Datapath Control Module in the user space Chromium network stack compatible with `ccp-agent` <https://github.com/mit-nms/ccp> of Networks and Mobile Systems (NNS) group, MIT CSAIL. Although it is designed to integrate itself into QUIC Datapath, *the current published version* does not contain the integration code parts. Rather, it can operate as an indendent process maintaining Transport Layer Protocol's Datapath state while communicating with `ccp-agent`.
+Congestion Control Plane (CCP) for Chromium (`ccp-chromium`) is a implementation of *a*STEAM Project <https://asteam.korea.ac.kr>'s QUIC Datapath Control Module in the user space Chromium network stack compatible with `ccp-agent` <https://github.com/mit-nms/ccp> of Networks and Mobile Systems (NNS) group, MIT CSAIL. Although it is designed to integrate itself into QUIC Datapath, *the current published version* does not contain the integration code parts. Rather, it can operate as an independent process maintaining Transport Layer Protocol's Datapath state while communicating with `ccp-agent`.
 
 ## Requirements and Dependencies
 
