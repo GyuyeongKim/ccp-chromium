@@ -1,4 +1,4 @@
-# ccp-chromium
+# CCP-Chromium
 QUIC Datapath Control Module for Chromium
 
 ## Introduction
